@@ -8,6 +8,7 @@ import { AtsScorePanel } from './AtsScorePanel';
 import { CvStorageEditor } from './CvStorageEditor';
 import { GenerateGreetingButton } from './GenerateGreetingButton';
 import { GreetingResultPanel } from './GreetingResultPanel';
+import { JobOfferInput } from './JobOfferInput';
 import { ObservationsInput } from './ObservationsInput';
 import { OptimizeButton } from './OptimizeButton';
 import { OptimizedResultPanel } from './OptimizedResultPanel';
@@ -16,6 +17,8 @@ export function CvOptimizerPanel() {
   const { cvText, saveCvText, isLoaded } = useStoredCv();
   const [captureError, setCaptureError] = useState<string | null>(null);
   const [observaciones, setObservaciones] = useState('');
+  const [manualJobOfferText, setManualJobOfferText] = useState('');
+  const inExtension = isExtensionContext();
 
   const { data, error, optimize, isLoading } = useOptimizeCv();
   const [editedResult, setEditedResult] = useState<string | null>(null);
@@ -44,9 +47,12 @@ export function CvOptimizerPanel() {
       return null;
     }
 
-    if (!isExtensionContext()) {
-      setCaptureError('La captura automática de la oferta solo funciona dentro de la extensión.');
-      return null;
+    if (!inExtension) {
+      if (manualJobOfferText.trim().length < 30) {
+        setCaptureError('Pega el texto de la oferta de empleo (mínimo 30 caracteres) antes de continuar.');
+        return null;
+      }
+      return manualJobOfferText;
     }
 
     try {
@@ -83,6 +89,10 @@ export function CvOptimizerPanel() {
       </header>
 
       {isLoaded && <CvStorageEditor cvText={cvText} onSave={saveCvText} />}
+
+      {!inExtension && (
+        <JobOfferInput value={manualJobOfferText} onChange={setManualJobOfferText} />
+      )}
 
       <ObservationsInput value={observaciones} onChange={setObservaciones} />
 
