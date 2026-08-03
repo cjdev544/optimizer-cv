@@ -1,0 +1,33 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: cv-backend
+    env_file:
+      - ./backend/.env
+    environment:
+      PORT: 4000
+      ALLOWED_ORIGIN: ${ALLOWED_ORIGIN:?ALLOWED_ORIGIN is required, e.g. https://cv.tudominio.com}
+    restart: unless-stopped
+    networks:
+      - default
+      - web
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:?VITE_API_URL is required, e.g. https://api.cv.tudominio.com}
+    container_name: cv-frontend
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - default
+      - web
+
+networks:
+  web:
+    external: true

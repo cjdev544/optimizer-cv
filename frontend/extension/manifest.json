@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "CV Optimizer",
+  "description": "Optimiza tu CV adaptándolo a ofertas de empleo usando IA.",
+  "version": "0.1.0",
+  "action": {
+    "default_popup": "src/popup/popup.html"
+  },
+  "background": {
+    "service_worker": "src/background/background.ts",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["src/content-script/content_script.ts"],
+      "run_at": "document_idle"
+    }
+  ],
+  "permissions": ["activeTab", "scripting", "storage"],
+  "host_permissions": ["http://localhost:4000/*"]
+}
