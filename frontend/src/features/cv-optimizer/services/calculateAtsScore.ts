@@ -29,7 +29,13 @@ function normalize(text: string): string {
 }
 
 function extractKeywords(jobOfferText: string): string[] {
-  const words = normalize(jobOfferText).match(/[a-z0-9+#.]{3,}/g) ?? [];
+  // El punto solo es parte de la keyword cuando une alfanuméricos (ej. "node.js",
+  // "next.js"): (?:\.[a-z0-9+#]+)* exige que después de cada punto haya más
+  // caracteres de palabra. Sin este límite, un simple /[a-z0-9+#.]{3,}/ también
+  // engancha el punto final de cualquier oración a la última palabra (ej.
+  // "TypeScript." al final de un bullet), generando keywords como "typescript."
+  // que casi nunca matchean el CV aunque la habilidad sí esté presente.
+  const words = normalize(jobOfferText).match(/[a-z0-9+#]{3,}(?:\.[a-z0-9+#]+)*/g) ?? [];
   return Array.from(new Set(words)).filter((word) => !STOPWORDS.has(word));
 }
 

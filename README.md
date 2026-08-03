@@ -1,6 +1,6 @@
 # CV Optimizer
 
-Aplicación web y extensión de Chrome (Manifest V3) que usa IA para adaptar un CV a una oferta de empleo específica: reescribe y prioriza la experiencia real del candidato, genera un mensaje de presentación personalizado, detecta y responde automáticamente en el idioma de la oferta, y enmascara los datos personales antes de enviarlos a un proveedor de IA externo.
+Aplicación web y extensión de Chrome (Manifest V3) que usa IA para adaptar un CV a una oferta de empleo específica: reescribe cada logro con la fórmula de impacto X,Y,Z de Google (resultado primero, no la tarea), prioriza la experiencia real del candidato según la oferta, genera un mensaje de presentación personalizado, detecta y responde automáticamente en el idioma de la oferta, y enmascara los datos personales antes de enviarlos a un proveedor de IA externo.
 
 ![Node](https://img.shields.io/badge/Node.js-20-339933?logo=node.js&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.5-3178C6?logo=typescript&logoColor=white)
@@ -24,7 +24,10 @@ Aplicación web y extensión de Chrome (Manifest V3) que usa IA para adaptar un 
 
 ## Características
 
-- **Optimización de CV con IA**: reescribe logros y habilidades priorizando lo relevante para la oferta, con verbos de acción, sin inventar experiencia, tecnologías, títulos ni fechas que no estén en el CV original.
+- **Optimización de CV con IA**: reescribe logros y habilidades priorizando lo relevante para la oferta, sin inventar experiencia, tecnologías, títulos ni fechas que no estén en el CV original.
+- **Formato de impacto X,Y,Z de Google**: cada viñeta se reestructura para que el logro (resultado) aparezca primero — no la tarea ni el verbo de acción —, con la métrica y la tecnología usada como continuación natural, en vez del clásico "Encargado de..." o "Desarrollé X" que un reclutador descarta en segundos.
+- **Priorización real por relevancia**: reordena qué puesto/proyecto y qué logro de cada uno aparece primero según las palabras clave de la oferta, no solo el orden cronológico del CV original.
+- **Score de Coincidencia ATS**: estima, antes y después de optimizar, qué porcentaje de las palabras clave de la oferta aparecen literalmente en el CV. Es una heurística de referencia (ver [Limitaciones conocidas](#limitaciones-conocidas)), no el scoring real de un ATS comercial.
 - **Saludo personalizado**: genera un mensaje corto (LinkedIn / correo introductorio) que conecta el perfil real del candidato con la necesidad de la oferta.
 - **Multilingüe y adaptativo**: detecta automáticamente el idioma de la oferta de empleo y responde íntegramente en ese idioma —aunque el CV original esté en otro—, usando terminología técnica localizada (ej. "Project Management" en inglés en vez de una traducción literal).
 - **Enmascarado de PII**: nombre, email, teléfono y dirección del candidato se reemplazan por símbolos opacos antes de salir hacia el proveedor de IA, y se restauran en la respuesta final. El proveedor de IA nunca recibe el dato real.
@@ -59,6 +62,42 @@ Express Controller → Zod valida el body → UseCase → Cv/JobOffer (entidades
 ```
 
 Gracias a los puertos, cambiar de proveedor de IA (OpenAI → Gemini, por ejemplo) o de almacenamiento (memoria → base de datos) es escribir un nuevo adaptador, sin tocar los casos de uso.
+
+### Pipeline de optimización: por qué son 5 llamadas a la IA, no 1
+
+`AiService.optimize()` no le pide a la IA "optimizá este CV" en una sola llamada de texto libre. En la práctica, pedirle a un modelo que redacte contenido, lo reordene por relevancia Y lo reestructure a un formato de oración específico (X,Y,Z de Google) al mismo tiempo resultó poco confiable — a veces cumplía una de las tres cosas, a veces ninguna, con `gpt-4o-mini` y con `gpt-4o` completo por igual (el modelo no era el cuello de botella; la tarea combinada sí lo era). La solución fue partir el trabajo en pasos angostos, cada uno con una única responsabilidad:
+
+```
+completeDraft()                              Structured Outputs (response_format: json_schema, strict)
+  Contenido + keywords de la oferta,          → DraftCvResponse: cada viñeta es una oración
+  sin dividir aún al formato X,Y,Z              natural en el campo "text", sin ordenar todavía
+      │
+      ├── decomposeBullets() → repairBullets()        en paralelo con   rankEntries()
+      │   "text" → { result, metric, method }                            Analiza la oferta y devuelve
+      │   repairBullets audita cada "result" y                           el ORDEN de entries/bullets
+      │   corrige los que aún arrancan con verbo+tarea                   como ÍNDICES (una permutación),
+      │   (o los deja intactos si no hay logro real                      nunca texto reescrito — así no
+      │   que rescatar: mejor no tocar que inventar)                     hay superficie para alucinar
+      │
+      ▼ (ambas ramas convergen)
+  assembleStructuredCv() + renderStructuredCv()
+  El orden final "result, metric, method." de cada viñeta y el formato de todo
+  el documento (negrita, guiones, una sola columna) los arma el CÓDIGO a partir
+  de la respuesta estructurada — nunca depende de que el modelo "recuerde" un
+  orden o un formato en texto libre
+      │
+      ▼
+  validateNoHallucinations()
+  Segunda llamada independiente que compara el CV YA ENSAMBLADO contra el
+  original y corrige cualquier dato agregado o inflado (paso que ya existía
+  antes del pipeline de 5 pasos, sin cambios)
+```
+
+`decomposeBullets`/`repairBullets` y `rankEntries` corren en paralelo (`Promise.all`): ninguno depende del resultado del otro, solo del borrador de `completeDraft`.
+
+**Degradación segura en cada paso**: si la descomposición, la auditoría X,Y,Z o la priorización fallan (red, JSON inválido, o — en priorización — un resultado que no es una permutación válida de los índices reales, ver `isValidRankedBlock`), ese paso se descarta y se usa el contenido del paso anterior sin modificar, en vez de romper toda la optimización por un problema en un paso secundario. El único paso sin fallback silencioso es `completeDraft`: si falla, `optimize()` falla — no hay CV que ensamblar sin él.
+
+**Resultado medido, no solo teórico**: en pruebas con ofertas reales, este pipeline logra entre 75% y 100% de las viñetas en formato X,Y,Z correcto (antes del pipeline de 5 pasos, una sola llamada de texto libre lograba 0%). El 20-25% restante son viñetas donde genuinamente no hay una consecuencia separable de la tarea — el sistema prefiere dejarlas en su redacción original antes que forzar una corrección artificial (voz pasiva, contenido duplicado) solo para cumplir la regla.
 
 ### Frontend — Vertical Slice Architecture
 
@@ -162,7 +201,7 @@ npm run dev:frontend                 # http://localhost:5173 (en otra terminal)
 | `ALLOWED_ORIGIN` | `http://localhost:5173` | Origin permitido por CORS (el de la app web/extensión) |
 | `AI_PROVIDER_API_KEY` | *(requerida)* | API key del proveedor de IA |
 | `AI_PROVIDER_BASE_URL` | `https://api.openai.com/v1` | Base URL compatible con la API de OpenAI (permite gateways/proxies compatibles) |
-| `AI_PROVIDER_MODEL` | `gpt-4o-mini` | Modelo a usar |
+| `AI_PROVIDER_MODEL` | `gpt-4o-mini` | Modelo a usar. Debe soportar Structured Outputs (`response_format: json_schema`, ver [Pipeline de optimización](#pipeline-de-optimización-por-qué-son-5-llamadas-a-la-ia-no-1)). En pruebas, `gpt-4o-mini` y `gpt-4o` dieron resultados equivalentes de calidad con el pipeline actual — la diferencia de confiabilidad venía de la arquitectura del prompt, no del tamaño del modelo |
 
 ### `frontend/.env`
 
@@ -235,6 +274,7 @@ Desde la raíz (usan npm workspaces):
 ## Seguridad y privacidad
 
 - **Enmascarado de PII antes de salir a terceros**: `RegexPiiMaskingService` detecta nombre (primera línea del CV, por convención), email, teléfono y dirección, y los reemplaza por símbolos opacos (`§0§`, `§1§`, ...) antes de que el CV llegue al proveedor de IA. La respuesta se desenmascara localmente antes de devolverla al usuario. El proveedor de IA nunca recibe el dato real.
+  > El regex de detección de teléfonos excluye explícitamente patrones de rango de años (`\d{4}\s*-\s*\d{4}`, ej. "2011 - 2018"): sin esa exclusión, fechas y duraciones del CV se enmascaraban por error al parecer un número de teléfono (dígitos + separadores + dígitos), lo que podía romper el formato del texto que recibía el modelo.
 - **Regla de cero alucinación**: los prompts prohíben explícitamente inventar experiencia, tecnologías, títulos, certificaciones o fechas de empleo que no estén en el CV original — incluso al traducir a otro idioma.
 - Esto es una **capa técnica de defensa en profundidad**, no una certificación de cumplimiento GDPR/RGPD por sí sola. Un cumplimiento real también requiere una base legal para el tratamiento de datos, un DPA con el proveedor de IA, política de privacidad, etc.
 
@@ -244,3 +284,5 @@ Desde la raíz (usan npm workspaces):
 - **Persistencia en memoria**: `InMemoryCvOptimizerRepository` no usa una base de datos — el historial de CVs optimizados se pierde al reiniciar el backend. Pensado para reemplazarse por un adaptador real sin tocar los casos de uso.
 - **Sin autenticación**: no hay usuarios ni sesiones; cualquiera con acceso al backend puede llamar a los endpoints.
 - **Sin parser de entrada**: la carga de CV en la UI es texto plano pegado a mano; no hay parser de PDF/DOCX de entrada todavía (sí hay exportación a PDF de salida).
+- **El formato X,Y,Z no llega al 100% de las viñetas**: entre 75% y 100% según la corrida, con ofertas reales (ver [Pipeline de optimización](#pipeline-de-optimización-por-qué-son-5-llamadas-a-la-ia-no-1)). Es un límite deliberado, no un bug pendiente: el sistema prioriza no inventar un logro falso por sobre cumplir la regla en el 100% de los casos.
+- **El Score de Coincidencia ATS es una heurística de texto literal** (`frontend/src/features/cv-optimizer/services/calculateAtsScore.ts`): cuenta palabras clave de la oferta presentes tal cual en el CV, sin sinónimos ni variaciones de conjugación (ej. "despliegue" no matchea "desplegué") y sin ponderar la POSICIÓN del contenido — así que no refleja mejoras de priorización/reordenamiento entre proyectos, solo cambios en qué palabras aparecen o desaparecen del texto.

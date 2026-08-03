@@ -9,6 +9,14 @@ const PHONE_CANDIDATE_REGEX = /\+?\d[\d\s().-]{6,}\d/g;
 const MIN_PHONE_DIGITS = 7;
 const MAX_PHONE_DIGITS = 15;
 
+// Rangos de años típicos de un CV (ej. "2011 - 2018") caen dentro del patrón
+// de teléfono de arriba (dígitos + separadores + dígitos) y terminan enmascarados
+// como si fueran un número. Eso rompe paréntesis de duración como "(7 años)": el
+// "(" queda dentro del placeholder opaco y el modelo, al ver un ")" sin apertura
+// visible, lo elimina al reescribir. Se descartan explícitamente antes de aplicar
+// el umbral de dígitos.
+const YEAR_RANGE_REGEX = /\b\d{4}\s*-\s*\d{4}\b/;
+
 // Palabras clave de dirección en varios idiomas, ya que el motor de IA es multilingüe.
 const ADDRESS_KEYWORD_REGEX =
   /\b(calle|avenida|av\.|address|street|st\.|stra(ß|ss)e|rue|rua|direcci[oó]n)\b/i;
@@ -85,6 +93,7 @@ export class RegexPiiMaskingService implements IPiiMaskingService {
   private detectPhones(text: string): string[] {
     const candidates = text.match(PHONE_CANDIDATE_REGEX) ?? [];
     return candidates.filter((candidate) => {
+      if (YEAR_RANGE_REGEX.test(candidate)) return false;
       const digitCount = candidate.replace(/\D/g, '').length;
       return digitCount >= MIN_PHONE_DIGITS && digitCount <= MAX_PHONE_DIGITS;
     });
