@@ -1,0 +1,49 @@
+name: Deploy
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-optimizer-cv
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # jsdom 30 (used by the frontend tests) requires Node ^22.22.2,
+          # ^24.15.0, or >=26 — Node 20 fails at runtime with a webidl error.
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run typecheck --workspace backend
+      - run: npm run test --workspace backend
+
+      - run: npm run typecheck --workspace frontend
+      - run: npm run test --workspace frontend
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to droplet over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            set -e
+            cd /opt/apps/optimizer-cv
+            git fetch origin master
+            git reset --hard origin/master
+            docker compose -f docker-compose.prod.yml up -d --build
+            docker image prune -f
