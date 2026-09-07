@@ -10,7 +10,7 @@ const LIKELY_JOB_DESCRIPTION_SELECTORS = [
   'main',
 ];
 
-function extractJobOfferText(): string {
+export function extractJobOfferText(): string {
   for (const selector of LIKELY_JOB_DESCRIPTION_SELECTORS) {
     const element = document.querySelector(selector);
     const text = element?.textContent?.trim();

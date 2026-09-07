@@ -257,20 +257,20 @@ function buildUserPrompt(cvText: string, jobOfferText: string, observaciones?: s
 // sin dividir todavía cada viñeta al formato X,Y,Z).
 // ---------------------------------------------------------------------------
 
-interface DraftBullet {
+export interface DraftBullet {
   text: string;
 }
 
-interface DraftExperienceEntry {
+export interface DraftExperienceEntry {
   header: string;
   bullets: DraftBullet[];
 }
 
-type DraftCvBlock =
+export type DraftCvBlock =
   | { type: 'text'; heading: string; content: string }
   | { type: 'experience'; heading: string; entries: DraftExperienceEntry[] };
 
-interface DraftCvResponse {
+export interface DraftCvResponse {
   name: string;
   contact: string;
   blocks: DraftCvBlock[];
@@ -342,21 +342,21 @@ const DRAFT_CV_JSON_SCHEMA = {
 // Paso 2: descomposición de las viñetas del borrador a result/metric/method.
 // ---------------------------------------------------------------------------
 
-interface DecomposedBullet {
+export interface DecomposedBullet {
   result: string;
   metric: string | null;
   method: string;
 }
 
-interface DecomposedExperienceEntry {
+export interface DecomposedExperienceEntry {
   bullets: DecomposedBullet[];
 }
 
-interface DecomposedExperienceBlock {
+export interface DecomposedExperienceBlock {
   entries: DecomposedExperienceEntry[];
 }
 
-interface DecomposedBulletsResponse {
+export interface DecomposedBulletsResponse {
   experienceBlocks: DecomposedExperienceBlock[];
 }
 
@@ -447,7 +447,7 @@ Devolvé ÚNICAMENTE un JSON con exactamente la misma cantidad de bloques, entri
 `.trim();
 
 /** true si `a` y `b` tienen la misma cantidad de bloques/entries/bullets, en el mismo orden — la única forma válida de un repair. */
-function isSameShape(a: DecomposedBulletsResponse, b: DecomposedBulletsResponse): boolean {
+export function isSameShape(a: DecomposedBulletsResponse, b: DecomposedBulletsResponse): boolean {
   if (a.experienceBlocks.length !== b.experienceBlocks.length) return false;
   return a.experienceBlocks.every((blockA, blockIndex) => {
     const blockB = b.experienceBlocks[blockIndex];
@@ -463,12 +463,12 @@ function isSameShape(a: DecomposedBulletsResponse, b: DecomposedBulletsResponse)
 // Paso 3: orden de relevancia de entries y de bullets dentro de cada entry.
 // ---------------------------------------------------------------------------
 
-interface RankedBlock {
+export interface RankedBlock {
   entryOrder: number[];
   bulletOrderByEntry: number[][];
 }
 
-interface RankingResponse {
+export interface RankingResponse {
   blocks: RankedBlock[];
 }
 
@@ -500,7 +500,7 @@ const RANKING_JSON_SCHEMA = {
 } as const;
 
 /** true si `candidate` es una permutación exacta de [0, 1, ..., length - 1]. */
-function isPermutationOf(candidate: number[] | undefined, length: number): candidate is number[] {
+export function isPermutationOf(candidate: number[] | undefined, length: number): candidate is number[] {
   if (!candidate || candidate.length !== length) return false;
   const seen = new Set(candidate);
   if (seen.size !== length) return false;
@@ -518,7 +518,7 @@ function isPermutationOf(candidate: number[] | undefined, length: number): candi
  * usa el orden original en vez de arriesgarse a perder o duplicar una entry
  * o una viñeta completa, que sería mucho peor que no reordenar.
  */
-function isValidRankedBlock(ranked: RankedBlock | undefined, entries: DraftExperienceEntry[]): ranked is RankedBlock {
+export function isValidRankedBlock(ranked: RankedBlock | undefined, entries: DraftExperienceEntry[]): ranked is RankedBlock {
   if (!ranked) return false;
   if (!isPermutationOf(ranked.entryOrder, entries.length)) return false;
   if (ranked.bulletOrderByEntry.length !== entries.length) return false;
@@ -530,16 +530,16 @@ function isValidRankedBlock(ranked: RankedBlock | undefined, entries: DraftExper
 // de texto.
 // ---------------------------------------------------------------------------
 
-interface StructuredExperienceEntry {
+export interface StructuredExperienceEntry {
   header: string;
   bullets: DecomposedBullet[];
 }
 
-type StructuredCvBlock =
+export type StructuredCvBlock =
   | { type: 'text'; heading: string; content: string }
   | { type: 'experience'; heading: string; entries: StructuredExperienceEntry[] };
 
-interface StructuredCvResponse {
+export interface StructuredCvResponse {
   name: string;
   contact: string;
   blocks: StructuredCvBlock[];
@@ -561,7 +561,7 @@ interface StructuredCvResponse {
  * bullets reales de ese bloque; si no, ese bloque se deja en su orden
  * original en vez de arriesgarse a perder o duplicar contenido.
  */
-function assembleStructuredCv(
+export function assembleStructuredCv(
   draft: DraftCvResponse,
   decomposed: DecomposedBulletsResponse | null,
   ranking: RankingResponse | null,
@@ -615,11 +615,11 @@ function assembleStructuredCv(
   return { name: draft.name, contact: draft.contact, blocks };
 }
 
-function stripTrailingPunctuation(text: string): string {
+export function stripTrailingPunctuation(text: string): string {
   return text.trim().replace(/[.\s]+$/, '');
 }
 
-function capitalizeFirst(text: string): string {
+export function capitalizeFirst(text: string): string {
   if (!text) return text;
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
@@ -631,7 +631,7 @@ function capitalizeFirst(text: string): string {
  * forma determinística, sin depender de que el modelo respete un orden de
  * palabras en texto libre.
  */
-function renderStructuredCv(cv: StructuredCvResponse): string {
+export function renderStructuredCv(cv: StructuredCvResponse): string {
   const lines: string[] = [`**${cv.name.trim()}**`, cv.contact.trim(), ''];
 
   for (const block of cv.blocks) {

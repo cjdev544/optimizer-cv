@@ -9,7 +9,8 @@
     "dev:extension": "vite build --watch --config vite.config.extension.ts",
     "build:extension": "vite build --config vite.config.extension.ts",
     "typecheck": "tsc --noEmit",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run"
   },
   "dependencies": {
     "jspdf": "^4.2.1",
@@ -18,14 +19,19 @@
   },
   "devDependencies": {
     "@crxjs/vite-plugin": "^2.0.0-beta.28",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.7",
     "@types/chrome": "^0.0.270",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.1",
     "autoprefixer": "^10.4.19",
+    "jsdom": "^30.0.1",
     "postcss": "^8.4.39",
     "tailwindcss": "^3.4.6",
     "typescript": "^5.5.3",
-    "vite": "^5.3.4"
+    "vite": "^5.3.4",
+    "vitest": "^2.1.9"
   }
 }
